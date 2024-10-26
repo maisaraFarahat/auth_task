@@ -1,79 +1,137 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import '../constants.dart'; // Assume this contains the base URL for the API
 
 class AdminScreen extends StatefulWidget {
+  final String accessToken; // Access token passed from the Sign In Screen
+
+  AdminScreen({required this.accessToken});
+
   @override
   _AdminScreenState createState() => _AdminScreenState();
 }
 
 class _AdminScreenState extends State<AdminScreen> {
-  // Simulate a list of users with their email and roles
-  List<Map<String, String>> users = [
-    {'email': 'admin@example.com', 'role': 'Admin'},
-    {'email': 'user1@example.com', 'role': 'User'},
-    {'email': 'user2@example.com', 'role': 'User'},
-    {'email': 'viewer@example.com', 'role': 'Viewer'},
-  ];
+  List<Map<String, dynamic>> users = []; // Store users fetched from the backend
+  final List<String> roles = [
+    'Admin',
+    'User',
+    'Viewer'
+  ]; // List of roles the admin can assign
+  Map<int, String> roleChanges =
+      {}; // Store temporary role changes before saving
+  bool _isLoading = true; // To show a loading indicator
+  String? _error; // To handle any errors during the API call
 
-  // List of roles the admin can assign
-  final List<String> roles = ['Admin', 'User', 'Viewer'];
+  @override
+  void initState() {
+    super.initState();
+    _fetchUsers(); // Fetch users when the screen is initialized
+  }
 
-  // Temporary map to store changes before saving
-  Map<int, String> roleChanges = {};
+  // Fetch all users from the backend API
+  Future<void> _fetchUsers() async {
+    try {
+      final response = await http.get(
+        Uri.parse('${Constants.Base_url}/users'),
+        headers: {
+          'Authorization':
+              'Bearer ${widget.accessToken}', // Pass the access token in the headers
+          'Content-Type': 'application/json',
+        },
+      );
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
 
-  // Function to temporarily update the user's role in roleChanges
-  void _onRoleChange(int index, String? newRole) {
-    if (newRole != null) {
+        setState(() {
+          users = data.map((user) {
+            return {
+              'id': user['id'],
+              'email': user['email'],
+              'role': user['role'],
+            };
+          }).toList();
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _error = 'Failed to load users. Please try again.';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
       setState(() {
-        roleChanges[index] = newRole;
+        _error =
+            'An error occurred. Please check your connection and try again.';
+        _isLoading = false;
       });
     }
   }
 
-// @TODO: use later to include api in the screen
-// Future<void> _applyChanges() async {
-//   try {
-//     for (int index in roleChanges.keys) {
-//       final user = users[index];
-//       final newRole = roleChanges[index];
+  // Apply role changes for a specific user by making an API request
+  Future<void> _applyRoleChange(int index, String userId) async {
+    final newRole = roleChanges[index];
+    if (newRole == null) return;
 
-//       // Make API call to update the role for this user
-//       await api.updateUserRole(user['email'], newRole);
-//     }
+    try {
+      final response = await http.patch(
+        Uri.parse('${Constants.Base_url}/users/editRole/$userId'),
+        headers: {
+          'Authorization':
+              'Bearer ${widget.accessToken}', // Include access token in headers
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'roleName': newRole}),
+      );
 
-//     // Apply changes to local list
-//     setState(() {
-//       roleChanges.forEach((index, newRole) {
-//         users[index]['role'] = newRole;
-//       });
-//       roleChanges.clear();
-//     });
+      if (response.statusCode == 200) {
+        // Update the user's role locally after successful API call
+        setState(() {
+          users[index]['role'] = newRole;
+          roleChanges.remove(index); // Remove the change from the temporary map
+        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Role updated successfully!'),
+        ));
+      } else {
+        throw Exception('Failed to update role');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Failed to update role. Please try again.'),
+      ));
+    }
+  }
 
-//     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-//       content: Text('Roles updated successfully!'),
-//     ));
-//   } catch (error) {
-//     // Handle any errors, like failed network requests
-//     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-//       content: Text('Failed to update roles'),
-//     ));
-//   }
-// }
+  // Delete a user by making an API request
+  Future<void> _deleteUser(int index, String userId) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('${Constants.Base_url}/users/deleteUser/$userId'),
+        headers: {
+          'Authorization':
+              'Bearer ${widget.accessToken}', // Include access token in headers
+          'Content-Type': 'application/json',
+        },
+      );
 
-  // Function to apply all changes when Save is pressed
-  void _applyChanges() {
-    setState(() {
-      roleChanges.forEach((index, newRole) {
-        users[index]['role'] = newRole;
-      });
-
-      // Clear the roleChanges map after applying changes
-      roleChanges.clear();
-    });
-
-    // Notify the admin that the changes were saved
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content: Text('Roles updated successfully!'),
-    ));
+      if (response.statusCode == 200) {
+        // Remove the user from the local list after successful deletion
+        setState(() {
+          users.removeAt(index);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('User deleted successfully!'),
+        ));
+      } else {
+        throw Exception('Failed to delete user');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Failed to delete user. Please try again.'),
+      ));
+    }
   }
 
   @override
@@ -82,58 +140,90 @@ class _AdminScreenState extends State<AdminScreen> {
       appBar: AppBar(
         title: const Text('Admin Dashboard'),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Manage User Roles',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-            Expanded(
-              child: ListView.builder(
-                itemCount: users.length,
-                itemBuilder: (context, index) {
-                  final user = users[index];
-                  final currentRole = roleChanges.containsKey(index)
-                      ? roleChanges[index]
-                      : user['role'];
+      body: _isLoading
+          ? const Center(
+              child:
+                  CircularProgressIndicator()) // Show loading indicator while fetching data
+          : _error != null
+              ? Center(
+                  child: Text(
+                      _error!)) // Show error message if something goes wrong
+              : Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Manage User Roles',
+                        style: TextStyle(
+                            fontSize: 24, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 20),
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: users.length,
+                          itemBuilder: (context, index) {
+                            final user = users[index];
+                            final currentRole = roleChanges.containsKey(index)
+                                ? roleChanges[index]
+                                : user['role'];
 
-                  return ListTile(
-                    leading: const Icon(Icons.person),
-                    title: Text(user['email']!),
-                    subtitle: Text('Role: ${currentRole}'),
-                    trailing: DropdownButton<String>(
-                      value:
-                          currentRole, // Current role (either from roleChanges or original)
-                      items: roles.map((String role) {
-                        return DropdownMenuItem<String>(
-                          value: role,
-                          child: Text(role),
-                        );
-                      }).toList(),
-                      onChanged: (newRole) {
-                        _onRoleChange(
-                            index, newRole); // Store the change temporarily
-                      },
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 20),
-            Center(
-              child: ElevatedButton(
-                onPressed:
-                    _applyChanges, // Apply changes when the Save button is pressed
-                child: const Text('Save Changes'),
-              ),
-            ),
-          ],
-        ),
-      ),
+                            return Dismissible(
+                              key: Key(user['id']
+                                  .toString()), // Use user ID as key for dismissible
+                              direction: DismissDirection
+                                  .endToStart, // Swipe from right to left to delete
+                              background: Container(
+                                color: Colors.red,
+                                alignment: Alignment.centerRight,
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 20),
+                                child: const Icon(Icons.delete,
+                                    color: Colors.white),
+                              ),
+                              onDismissed: (direction) {
+                                _deleteUser(index, user['id'].toString());
+                              },
+                              child: ListTile(
+                                leading: const Icon(Icons.person),
+                                title: Text(user['email']),
+                                subtitle: Text('Role: $currentRole'),
+                                trailing: DropdownButton<String>(
+                                  value: currentRole,
+                                  items: roles.map((String role) {
+                                    return DropdownMenuItem<String>(
+                                      value: role,
+                                      child: Text(role),
+                                    );
+                                  }).toList(),
+                                  onChanged: (newRole) {
+                                    setState(() {
+                                      roleChanges[index] =
+                                          newRole!; // Store the change temporarily
+                                    });
+                                  },
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Center(
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            // Apply role changes for all users
+                            for (var index in roleChanges.keys) {
+                              await _applyRoleChange(
+                                  index, users[index]['id'].toString());
+                            }
+                          },
+                          child: const Text('Save Changes'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
     );
   }
 }

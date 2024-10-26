@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import 'screens/admin_screen.dart';
-import 'screens/user_screen.dart';
-import 'screens/viewer_screen.dart';
+import 'screens/sign_in_screen.dart';
+import 'screens/sign_up_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -17,50 +17,40 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      initialRoute: '/',
-      routes: {
-        '/': (context) => const RoleBasedHomeScreen(),
-        '/admin': (context) => AdminScreen(),
-        '/user': (context) => UserScreen(),
-        '/viewer': (context) => ViewerScreen(),
-      },
+      home: HomePage(), // Ensure HomePage is set as the starting screen
     );
   }
 }
 
-class RoleBasedHomeScreen extends StatelessWidget {
-  // Simulate getting the user role from an API or backend
-  final String userRole = "Viewer";
-
-  const RoleBasedHomeScreen(
-      {super.key}); // Change to "Admin", "User", or "Viewer"
-
+class HomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Role Based Home Screen'),
+        title: Text('Welcome to the App'),
       ),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            const Text('Welcome to Role Based App!'),
-            const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () {
-                // Navigate to the appropriate screen based on user role
-                if (userRole == 'Admin') {
-                  Navigator.pushNamed(context, '/admin');
-                } else if (userRole == 'User') {
-                  Navigator.pushNamed(context, '/user');
-                } else if (userRole == 'Viewer') {
-                  Navigator.pushNamed(context, '/viewer');
-                } else {
-                  print('Unknown role');
-                }
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => SignInScreen()),
+                );
               },
-              child: const Text('Go to Dashboard'),
+              child: Text('Sign In'),
+            ),
+            SizedBox(height: 20), // Space between buttons
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => SignUpScreen()),
+                );
+              },
+              child: Text('Sign Up'),
             ),
           ],
         ),
